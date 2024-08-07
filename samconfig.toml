@@ -1,0 +1,12 @@
+version = 0.1
+
+[prod]
+[prod.deploy]
+[prod.deploy.parameters]
+stack_name = "moxie-demo-stack"
+s3_bucket = "demo-sam-framework"
+region = "us-east-2"
+capabilities = ["CAPABILITY_IAM","CAPABILITY_NAMED_IAM"]
+confirm_changeset = true
+parameter_overrides = "DeployEnv=prod"
+fail_on_empty_changeset = false

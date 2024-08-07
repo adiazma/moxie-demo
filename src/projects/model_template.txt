@@ -1,0 +1,10 @@
+from projects.base_project import BaseProject
+from models.results_model import Result, ResultType
+
+class NameOfYourProject(BaseProject):
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+    
+    def run(self, **kwargs) -> Result:
+        return Result(status=ResultType.SUCCESS)

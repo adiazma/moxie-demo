@@ -1,0 +1,133 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  DeployEnv:
+    Type: String
+    Default: ''
+
+Resources:
+
+  #=========================================
+  # Lambda Role
+  DefaultLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'default-lambda-role-${DeployEnv}'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: 'SecretsManagerParameterAccess'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetResourcePolicy
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                  - secretsmanager:ListSecretVersionIds
+                Resource:
+                  - '*'
+
+  #=========================================
+  # Functions
+  PokemonFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'pokemon-lambda-${DeployEnv}'
+      CodeUri: .
+      Handler: handler.lambda_handler
+      Runtime: python3.12
+      Role: !GetAtt DefaultLambdaRole.Arn
+      Timeout: 900
+      Tracing: Active
+      Environment:
+        Variables:
+          APP_ENV: !Sub '${DeployEnv}'
+          PROJECT: 'pokemon_scraper'
+
+  #=========================================
+  # Cognito
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: PokemonUserPool
+      AutoVerifiedAttributes: ['email']
+
+  CognitoUserPoolClient:
+    Type: 'AWS::Cognito::UserPoolClient'
+    Properties:
+      ClientName: PokemonUserPoolClient
+      UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: false
+  
+  #=========================================
+  # API Gateway
+  ApiGatewayRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: 'PokemonApi'
+
+  ApiGatewayResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
+      PathPart: 'pokemon'
+      RestApiId: !Ref ApiGatewayRestApi
+
+  ApiGatewayAuthorizer:
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      Name: 'CognitoAuthorizer'
+      Type: 'COGNITO_USER_POOLS'
+      RestApiId: !Ref ApiGatewayRestApi
+      IdentitySource: 'method.request.header.Authorization'
+      ProviderARNs:
+        - !Sub 'arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPool}'
+  
+  ApiGatewayMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: 'COGNITO_USER_POOLS'
+      HttpMethod: 'GET'
+      ResourceId: !Ref ApiGatewayResource
+      RestApiId: !Ref ApiGatewayRestApi
+      AuthorizerId: !Ref ApiGatewayAuthorizer
+      Integration:
+        IntegrationHttpMethod: 'POST'
+        Type: 'AWS_PROXY'
+        Uri: 
+          Fn::Sub: 
+            - 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PokemonFunction.Arn}/invocations'
+            - PokemonFunction:
+                Ref: 'PokemonFunction'
+  
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: ApiGatewayMethod
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      StageName: !Sub '${DeployEnv}'
+
+  #=========================================
+  # Invoke
+  LambdaApiGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref PokemonFunction
+      Principal: 'apigateway.amazonaws.com'
+      SourceArn: 
+        Fn::Sub: 
+          - 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*'
+          - ApiGatewayRestApi: !Ref ApiGatewayRestApi
