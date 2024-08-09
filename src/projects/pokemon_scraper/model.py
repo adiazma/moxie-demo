@@ -1,5 +1,6 @@
 from projects.base_project import BaseProject
 from requests import Request
+import json
 
 class PokemonScraper(BaseProject):
 
@@ -11,8 +12,18 @@ class PokemonScraper(BaseProject):
     def run(self, **kwargs) -> dict:
         
         # GET POKEMON LIST
-        pokemon = kwargs.get('queryStringParameters', {}).get('name')
-        if pokemon is not None and len(pokemon) > 3:
+        search_by_pokemon = True
+        pokemon = kwargs.get('queryStringParameters')
+        if pokemon is None:
+            search_by_pokemon = False
+        elif pokemon.get('name') is None:
+            search_by_pokemon = False
+        elif len(pokemon.get('name')) <= 3:
+            search_by_pokemon = False
+
+        if search_by_pokemon:
+            pokemon = pokemon['name']
+            print('Searching for pokemon: {0}'.format(pokemon))
             url = f'https://{self.BASE_URL}/api/v2/pokemon?limit=100000'
             request = Request('GET', url=url)
             req = self._session.prepare_request(request)
@@ -48,4 +59,8 @@ class PokemonScraper(BaseProject):
                 'Location_area_encounters': [a.get('location_area', {}).get('name') for a in encounters],
             })
 
-        return {'result': total}
+        print('Result: {0}'.format(total))
+        return {
+            'statusCode': 200,
+            'body': json.dumps({'result': total})
+        }

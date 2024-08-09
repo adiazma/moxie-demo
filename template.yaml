@@ -50,6 +50,7 @@ Resources:
       Runtime: python3.9
       Role: !GetAtt DefaultLambdaRole.Arn
       Timeout: 900
+      MemorySize: 2560
       Tracing: Active
       Environment:
         Variables:
