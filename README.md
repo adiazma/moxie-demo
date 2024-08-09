@@ -99,5 +99,5 @@ sam deploy --force-upload --config-env prod
 To delete the CloudFormation stack associated with your SAM application, run the following command:
 
 ```
-aws cloudformation delete-stack --stack-name lambda-scraper-sam-framework --region us-east-2
+aws cloudformation delete-stack --stack-name moxie-demo-stack --region us-east-2
 ```

@@ -47,7 +47,7 @@ Resources:
       FunctionName: !Sub 'pokemon-lambda-${DeployEnv}'
       CodeUri: .
       Handler: handler.lambda_handler
-      Runtime: python3.12
+      Runtime: python3.9
       Role: !GetAtt DefaultLambdaRole.Arn
       Timeout: 900
       Tracing: Active
@@ -57,7 +57,7 @@ Resources:
           PROJECT: 'pokemon_scraper'
 
   #=========================================
-  # Cognito
+  # Cognito PROD
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
@@ -69,6 +69,21 @@ Resources:
     Properties:
       ClientName: PokemonUserPoolClient
       UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: false
+  
+  #=========================================
+  # Cognito DEV
+  CognitoUserPoolDev:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: PokemonUserPoolDev
+      AutoVerifiedAttributes: ['email']
+
+  CognitoUserPoolDevClient:
+    Type: 'AWS::Cognito::UserPoolClient'
+    Properties:
+      ClientName: PokemonUserPoolDevClient
+      UserPoolId: !Ref CognitoUserPoolDev
       GenerateSecret: false
   
   #=========================================
@@ -84,25 +99,14 @@ Resources:
       ParentId: !GetAtt ApiGatewayRestApi.RootResourceId
       PathPart: 'pokemon'
       RestApiId: !Ref ApiGatewayRestApi
-
-  ApiGatewayAuthorizer:
-    Type: AWS::ApiGateway::Authorizer
-    Properties:
-      Name: 'CognitoAuthorizer'
-      Type: 'COGNITO_USER_POOLS'
-      RestApiId: !Ref ApiGatewayRestApi
-      IdentitySource: 'method.request.header.Authorization'
-      ProviderARNs:
-        - !Sub 'arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPool}'
   
   ApiGatewayMethod:
     Type: AWS::ApiGateway::Method
     Properties:
-      AuthorizationType: 'COGNITO_USER_POOLS'
+      AuthorizationType: 'NONE'
       HttpMethod: 'GET'
       ResourceId: !Ref ApiGatewayResource
       RestApiId: !Ref ApiGatewayRestApi
-      AuthorizerId: !Ref ApiGatewayAuthorizer
       Integration:
         IntegrationHttpMethod: 'POST'
         Type: 'AWS_PROXY'
